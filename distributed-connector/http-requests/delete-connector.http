@@ -1,0 +1,8 @@
+### DELETE connector
+DELETE http://localhost:8083/connectors/mysql_source_user_profiles
+
+###
+### DELETE connector
+DELETE http://localhost:8083/connectors/postgresql-jdbc-sink-connector
+
+###

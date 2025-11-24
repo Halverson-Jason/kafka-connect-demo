@@ -1,0 +1,125 @@
+services:
+  mysql:
+    image: mysql:9.5.0
+    container_name: mysql-kafka
+    environment:
+      - MYSQL_ROOT_PASSWORD=jason
+      - MYSQL_DATABASE=kafka_app
+    ports:
+      - "3306:3306"
+    volumes:
+      - ./database-setups/mysql-init:/docker-entrypoint-initdb.d:ro
+
+  postgres:
+    image: postgres:18.1
+    container_name: postgres-kafka
+    environment:
+      - POSTGRES_PASSWORD=jason
+      - POSTGRES_DB=users
+    ports:
+      - "5432:5432"
+    volumes:
+      - ./database-setups/postgresql-create-table.sql:/docker-entrypoint-initdb.d/1-create-table.sql
+
+  kafka-1:
+    image: confluentinc/cp-kafka:8.1.0
+    container_name: kafka-1
+    ports:
+      - "9092:9092"
+    environment:
+      CLUSTER_ID: "WnLkTHhkQaiJbwP8FClPhw"
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka-1:9091,2@kafka-2:9091,3@kafka-3:9091
+      KAFKA_LISTENERS: PLAINTEXT://:9090,CONTROLLER://:9091,EXTERNAL://:9092
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka-1:9090, EXTERNAL://${HOSTNAME:-localhost}:9092
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,EXTERNAL:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_LOG_DIRS: /var/lib/kafka/data
+    volumes:
+      - ./kafka-volumes/kafka-1-data:/var/lib/kafka/data
+    networks:
+      - kafka-net
+
+  kafka-2:
+    image: confluentinc/cp-kafka:8.1.0
+    container_name: kafka-2
+    ports:
+      - "9094:9094"
+    environment:
+      CLUSTER_ID: "WnLkTHhkQaiJbwP8FClPhw"
+      KAFKA_NODE_ID: 2
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka-1:9091,2@kafka-2:9091,3@kafka-3:9091
+      KAFKA_LISTENERS: PLAINTEXT://:9090,CONTROLLER://:9091,EXTERNAL://:9094
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka-2:9090, EXTERNAL://${HOSTNAME:-localhost}:9094
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,EXTERNAL:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_LOG_DIRS: /var/lib/kafka/data
+    volumes:
+      - ./kafka-volumes/kafka-2-data:/var/lib/kafka/data
+    networks:
+      - kafka-net
+
+  kafka-3:
+    image: confluentinc/cp-kafka:8.1.0
+    container_name: kafka-3
+    ports:
+      - "9096:9096"
+    environment:
+      CLUSTER_ID: "WnLkTHhkQaiJbwP8FClPhw"
+      KAFKA_NODE_ID: 3
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka-1:9091,2@kafka-2:9091,3@kafka-3:9091
+      KAFKA_LISTENERS: PLAINTEXT://:9090,CONTROLLER://:9091,EXTERNAL://:9096
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka-3:9090, EXTERNAL://${HOSTNAME:-localhost}:9096
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,EXTERNAL:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_LOG_DIRS: /var/lib/kafka/data
+    volumes:
+      - ./kafka-volumes/kafka-3-data:/var/lib/kafka/data
+    networks:
+      - kafka-net
+        
+
+
+  kafka-connect-worker-1:
+    # This 'image' field now sets the name:tag for the built image
+    image: custom-kafka-connect:1.0.0
+    build:
+      context: .
+      dockerfile: dockerfile-kafka-connect 
+    container_name: kafka-connect-distributed-worker-1
+    depends_on:
+      - mysql
+      - postgres
+      - kafka-1
+      - kafka-2
+      - kafka-3
+    ports:
+      - "8083:8083"
+    environment:
+      CONNECT_REST_ADVERTISED_HOST_NAME: 127.0.0.1
+      CONNECT_REST_ADVERTISED_PORT: 8083
+      CONNECT_BOOTSTRAP_SERVERS: kafka-1:9090,kafka-2:9090,kafka-3:9090
+      CONNECT_GROUP_ID: ${CONNECT_GROUP_ID}
+      CONNECT_CONFIG_STORAGE_TOPIC: ${CONNECT_CONFIG_STORAGE_TOPIC}
+      CONNECT_OFFSET_STORAGE_TOPIC: ${CONNECT_OFFSET_STORAGE_TOPIC}
+      CONNECT_STATUS_STORAGE_TOPIC: ${CONNECT_STATUS_STORAGE_TOPIC}
+      CONNECT_CONFIG_STORAGE_REPLICATION_FACTOR: ${CONNECT_CONFIG_STORAGE_REPLICATION_FACTOR}
+      CONNECT_OFFSET_STORAGE_REPLICATION_FACTOR: ${CONNECT_OFFSET_STORAGE_REPLICATION_FACTOR}
+      CONNECT_STATUS_STORAGE_REPLICATION_FACTOR: ${CONNECT_STATUS_STORAGE_REPLICATION_FACTOR}
+      CONNECT_KEY_CONVERTER: ${CONNECT_KEY_CONVERTER}
+      CONNECT_VALUE_CONVERTER: ${CONNECT_VALUE_CONVERTER}
+      CONNECT_PLUGIN_PATH: ${CONNECT_PLUGIN_PATH}
+      CLASSPATH: ${CLASSPATH}
+    networks:
+      - kafka-net
+
+
+networks:
+  kafka-net:
+    driver: bridge

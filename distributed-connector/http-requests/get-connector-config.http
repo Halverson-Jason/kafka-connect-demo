@@ -1,0 +1,4 @@
+### GET a list of kafka connectors
+### ex. GET http://localhost:8083/connectors/{name}
+GET http://localhost:8083/connectors/mysql_source_user_profiles
+###
